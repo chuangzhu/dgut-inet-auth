@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+import requests
+import os
+import re
+import json
+import urllib
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
+
+
+def encodeuricomp(text):
+    return urllib.parse.quote(text, safe="~()*!.'")
+
+
+def encrypt(password, exponent, modulus):
+    encoded = encodeuricomp(encodeuricomp(password))[::-1].encode()
+    pubkey = RSA.RsaKey(e=exponent, n=modulus)
+    encryptor = PKCS1_OAEP.new(pubkey)
+    return encryptor.encrypt(encoded).hex()
+
+
+ORIGIN = 'http://172.31.252.91'
+PORTAL_URL = f'{ORIGIN}/eportal/index.jsp'
+PAGEINFO_URL = f'{ORIGIN}/eportal/InterFace.do?method=pageInfo'
+LOGIN_URL = f'{ORIGIN}/eportal/InterFace.do?method=login'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/82.0.4051.0 Safari/537.36 Edg/82.0.425.3'
+
+config = open(os.sys.argv[1]).readlines()
+username = config[0].strip()
+password = config[1].strip()
+session = requests.Session()
+session.headers.update({'User-Agent': USER_AGENT})
+
+# Test connectivity
+try:
+    test_conn = session.get('http://www.dgut.edu.cn')
+except requests.ConnectionError:
+    os.sys.exit(1)
+
+# Already logged in
+if test_conn.status_code == 302:
+    os.sys.exit(0)
+
+portal_query = re.search(f"'{PORTAL_URL}\\?(.+?)'", test_conn.text).group(1)
+portal_url = f'{PORTAL_URL}?{portal_query}'
+
+# portal = session.get(portal_url)
+# # Backend returns header Content-Encoding: 'gzip  ' [sic],
+# # causing automatic decompression not working
+# gz = gzip.GzipFile(fileobj=io.BytesIO(portal.content))
+# portal_html = gz.read().decode('gbk')
+
+session.headers.update({'Referfer': portal_url, 'Origin': ORIGIN})
+# Backend doesn't return Content-Encoding, manually decode here
+pageinfo_text = session.post(
+    PAGEINFO_URL, data={'queryString': portal_query}).content.decode('utf-8')
+pageinfo = json.loads(pageinfo_text)
+
+# Hex strings
+exponent = int(pageinfo['publicKeyExponent'], 16)
+modulus = int(pageinfo['publicKeyModulus'], 16)
+
+ciphertext = encrypt(password, exponent, modulus)
+
+data = {'userId': username,
+        'password': ciphertext,
+        'service': '',
+        'queryString': portal_query,
+        'operatorPwd': '',
+        'operatorUserId': '',
+        'validcode': '',
+        'passwordEncrypt': True}
+r = session.post(LOGIN_URL, data=data)
+r_json = json.loads(r.content.decode('utf-8'))
+
+print(r_json)
+assert r_json['result'] == 'success'
