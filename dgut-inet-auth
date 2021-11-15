@@ -6,7 +6,6 @@ import re
 import json
 import urllib
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
 
 
 def encodeuricomp(text):
@@ -14,10 +13,14 @@ def encodeuricomp(text):
 
 
 def encrypt(password, exponent, modulus):
-    encoded = encodeuricomp(encodeuricomp(password))[::-1].encode()
+    encoded = encodeuricomp(encodeuricomp(password))[::-1]
     pubkey = RSA.RsaKey(e=exponent, n=modulus)
-    encryptor = PKCS1_OAEP.new(pubkey)
-    return encryptor.encrypt(encoded).hex()
+    encoded_int = int.from_bytes(encoded.encode(), os.sys.byteorder)
+    # HACK: the system uses unsafe no padding RSA,
+    # HACK: which is not supported by PyCryptodomo
+    # HACK: use a internal API here
+    cipher_int = pubkey._encrypt(encoded_int)
+    return hex(cipher_int)[2:]
 
 
 ORIGIN = 'http://172.31.252.91'
@@ -34,8 +37,9 @@ session.headers.update({'User-Agent': USER_AGENT})
 
 # Test connectivity
 try:
-    test_conn = session.get('http://www.dgut.edu.cn')
+    test_conn = session.get('http://www.dgut.edu.cn', allow_redirects=False)
 except requests.ConnectionError:
+    print("Network is unreachable", file=os.sys.stderr)
     os.sys.exit(1)
 
 # Already logged in
@@ -45,13 +49,8 @@ if test_conn.status_code == 302:
 portal_query = re.search(f"'{PORTAL_URL}\\?(.+?)'", test_conn.text).group(1)
 portal_url = f'{PORTAL_URL}?{portal_query}'
 
-# portal = session.get(portal_url)
-# # Backend returns header Content-Encoding: 'gzip  ' [sic],
-# # causing automatic decompression not working
-# gz = gzip.GzipFile(fileobj=io.BytesIO(portal.content))
-# portal_html = gz.read().decode('gbk')
-
 session.headers.update({'Referfer': portal_url, 'Origin': ORIGIN})
+
 # Backend doesn't return Content-Encoding, manually decode here
 pageinfo_text = session.post(
     PAGEINFO_URL, data={'queryString': portal_query}).content.decode('utf-8')
@@ -70,8 +69,16 @@ data = {'userId': username,
         'operatorPwd': '',
         'operatorUserId': '',
         'validcode': '',
-        'passwordEncrypt': True}
-r = session.post(LOGIN_URL, data=data)
+        'passwordEncrypt': 'true'}
+cookies = {'EPORTAL_AUTO_LAND': '',
+           'EPORTAL_COOKIE_DOMAIN': '',
+           'EPORTAL_COOKIE_OPERATORPWD': '',
+           'EPORTAL_COOKIE_PASSWORD': ciphertext,
+           'EPORTAL_COOKIE_SAVEPASSWORD': 'false',
+           'EPORTAL_COOKIE_SERVER': '',
+           'EPORTAL_COOKIE_SERVER_NAME': '',
+           'EPORTAL_COOKIE_USERNAME': username}
+r = session.post(LOGIN_URL, data=data, cookies=cookies)
 r_json = json.loads(r.content.decode('utf-8'))
 
 print(r_json)
