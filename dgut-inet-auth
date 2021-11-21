@@ -5,7 +5,6 @@ import os
 import re
 import json
 import urllib
-from Crypto.PublicKey import RSA
 
 
 def encodeuricomp(text):
@@ -13,6 +12,7 @@ def encodeuricomp(text):
 
 
 def encrypt(password, exponent, modulus):
+    from Crypto.PublicKey import RSA
     encoded = encodeuricomp(encodeuricomp(password))[::-1]
     pubkey = RSA.RsaKey(e=exponent, n=modulus)
     encoded_int = int.from_bytes(encoded.encode(), os.sys.byteorder)

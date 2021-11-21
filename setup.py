@@ -6,7 +6,7 @@ with open(path.join(here, 'README.md')) as f:
     long_description = f.read()
 
 setup(name='dgut-inet-auth',
-      version='0.1',
+      version='0.2',
       description='Log in to DGUT campus internet',
       long_description=long_description,
       long_description_content_type='text/markdown',
