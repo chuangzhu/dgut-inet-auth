@@ -13,7 +13,7 @@ def encodeuricomp(text):
 
 def encrypt(password, exponent, modulus):
     from Crypto.PublicKey import RSA
-    encoded = encodeuricomp(encodeuricomp(password))[::-1]
+    encoded = password[::-1]
     pubkey = RSA.RsaKey(e=exponent, n=modulus)
     encoded_int = int.from_bytes(encoded.encode(), os.sys.byteorder)
     # HACK: the system uses unsafe no padding RSA,
@@ -60,7 +60,8 @@ pageinfo = json.loads(pageinfo_text)
 exponent = int(pageinfo['publicKeyExponent'], 16)
 modulus = int(pageinfo['publicKeyModulus'], 16)
 
-ciphertext = encrypt(password, exponent, modulus)
+mac = urllib.parse.parse_qs(portal_query).get('mac', ['111111111'])
+ciphertext = encrypt(f"{password}>{mac[0]}", exponent, modulus)
 
 data = {'userId': username,
         'password': ciphertext,

@@ -6,12 +6,12 @@ with open(path.join(here, 'README.md')) as f:
     long_description = f.read()
 
 setup(name='dgut-inet-auth',
-      version='0.2',
+      version='0.3',
       description='Log in to DGUT campus internet',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='Zhu Chuang',
-      author_email='genelocated@yandex.com',
+      author_email='pypi@chuang.cz',
       packages=[],
       scripts=['dgut-inet-auth'],
       python_requires='>=3.7',
