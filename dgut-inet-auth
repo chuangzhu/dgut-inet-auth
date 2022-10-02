@@ -5,10 +5,7 @@ import os
 import re
 import json
 import urllib
-
-
-def encodeuricomp(text):
-    return urllib.parse.quote(text, safe="~()*!.'")
+import socket
 
 
 def encrypt(password, exponent, modulus):
@@ -23,6 +20,16 @@ def encrypt(password, exponent, modulus):
     return hex(cipher_int)[2:]
 
 
+class SockOptsAdapter(requests.adapters.HTTPAdapter):
+    def __init__(self, sockopts, **kwargs):
+        self.sockopts = sockopts
+        super(SockOptsAdapter, self).__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        super(SockOptsAdapter, self).init_poolmanager(
+            *args, socket_options=self.sockopts, **kwargs)
+
+
 ORIGIN = 'http://172.31.252.91'
 PORTAL_URL = f'{ORIGIN}/eportal/index.jsp'
 PAGEINFO_URL = f'{ORIGIN}/eportal/InterFace.do?method=pageInfo'
@@ -35,11 +42,18 @@ password = config[1].strip()
 session = requests.Session()
 session.headers.update({'User-Agent': USER_AGENT})
 
+# Advanced feature: firewall mark, needs CAP_NET_ADMIN
+if 'FWMARK' in os.environ:
+    http_adapter = SockOptsAdapter(
+        [(socket.SOL_SOCKET, socket.SO_MARK, int(os.environ['FWMARK']))])
+    session.mount('http://', http_adapter)
+    session.mount('https://', http_adapter)
+
 # Test connectivity
 try:
     test_conn = session.get('http://www.dgut.edu.cn', allow_redirects=False)
 except requests.ConnectionError:
-    print("Network is unreachable", file=os.sys.stderr)
+    print('Network is unreachable', file=os.sys.stderr)
     os.sys.exit(1)
 
 # Already logged in
@@ -61,7 +75,7 @@ exponent = int(pageinfo['publicKeyExponent'], 16)
 modulus = int(pageinfo['publicKeyModulus'], 16)
 
 mac = urllib.parse.parse_qs(portal_query).get('mac', ['111111111'])
-ciphertext = encrypt(f"{password}>{mac[0]}", exponent, modulus)
+ciphertext = encrypt(f'{password}>{mac[0]}', exponent, modulus)
 
 data = {'userId': username,
         'password': ciphertext,

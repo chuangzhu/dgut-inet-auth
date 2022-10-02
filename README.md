@@ -29,6 +29,8 @@ Return values:
 - Exit code `0`, no output: already authenticated, skip.
 - Exit code `1`: network is unreachable.
 
+You can optionally configure the firewall mark this program uses with a `FWMARK` environment variable to work with policy routing.
+
 ## Use with systemd
 
 Create service unit:
